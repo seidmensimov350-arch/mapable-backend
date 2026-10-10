@@ -37,6 +37,15 @@ app.get("/api/stats", asyncHandler(async (req, res) => {
     GROUP BY wheelchair_value
     ORDER BY count DESC
   `);
+  const [[unverified]] = await db.query(`
+    SELECT COUNT(*) AS total
+    FROM osm_accessibility oa
+    WHERE COALESCE(NULLIF(oa.wheelchair, ''), 'unknown') = 'unknown'
+      AND NOT EXISTS (
+        SELECT 1 FROM verifications v
+        WHERE v.place_id = oa.place_id AND v.accessibility_feature = 'stair_free_entrance'
+      )
+  `);
   const [[official]] = await db.query("SELECT COUNT(*) AS total FROM official_place_scores");
   const [[parking]] = await db.query(
     "SELECT COUNT(*) AS locations, COALESCE(SUM(number_of_places), 0) AS spaces FROM accessible_parking"
@@ -44,14 +53,20 @@ app.get("/api/stats", asyncHandler(async (req, res) => {
   const [[restaurants]] = await db.query(
     "SELECT COUNT(*) AS total FROM restaurant_accessibility_evidence WHERE place_id IS NOT NULL"
   );
+  const [[visitors]] = await db.query(
+    "SELECT COUNT(DISTINCT place_id) AS places, COUNT(*) AS answers FROM verifications"
+  );
 
   res.json({
     total_places: places.total,
     osm_wheelchair: wheelchair,
+    osm_unknown_unverified: unverified.total,
     official_scored_places: official.total,
     parking_locations: parking.locations,
     parking_spaces: parking.spaces,
     accessible_restaurants: restaurants.total,
+    visitor_checked_places: visitors.places,
+    visitor_answers: visitors.answers,
   });
 }));
 

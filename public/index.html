@@ -212,7 +212,13 @@
     .pin.reportedno { background: #fff; color: var(--pin-no); border-color: var(--pin-no); }
     .pin.sel { transform: scale(1.45); box-shadow: 0 0 0 4px rgba(31,91,216,.45), 0 2px 8px rgba(0,0,0,.4); }
     .pk-pin { width: 26px; height: 26px; border-radius: 7px; background: var(--pin-parking); border: 2.5px solid #fff; color: #fff; font: 700 14px/1 var(--font); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
-    .me-pin { width: 18px; height: 18px; border-radius: 50%; background: var(--pin-parking); border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(31,91,216,.25); }
+    /* Live location, Google Maps style: blue dot, white ring, soft pulse */
+    .me-dot { position: relative; width: 22px; height: 22px; }
+    .me-dot::before { content: ""; position: absolute; inset: -9px; border-radius: 50%; background: rgba(26,115,232,.35); animation: mePulse 2s ease-out infinite; }
+    .me-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: #1A73E8; border: 3px solid #fff; box-sizing: border-box; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+    @keyframes mePulse { 0% { transform: scale(.5); opacity: .9; } 100% { transform: scale(1.4); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .me-dot::before { animation: none; transform: scale(1); opacity: .35; } }
+    .tool.locating { color: #1A73E8; }
     .leaflet-popup-content-wrapper { border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
     .leaflet-popup-tip { background: var(--surface); }
     .leaflet-popup-content { font: 15px/1.4 var(--font); margin: 14px 16px; }
@@ -979,17 +985,38 @@
     $("parking").addEventListener("click", () => setParking($("parking").getAttribute("aria-pressed") !== "true"));
 
     /* ---------- Location ---------- */
-    let meMarker;
+    let meMarker, meRing, meWatch = null, meLast = null;
+    const meIcon = L.divIcon({ className: "", html: '<div class="me-dot"></div>', iconSize: [22, 22], iconAnchor: [11, 11] });
+
+    function showMe(pos) {
+      const ll = [pos.coords.latitude, pos.coords.longitude];
+      const acc = Math.min(pos.coords.accuracy || 0, 1000);
+      const first = !meLast;
+      meLast = ll;
+      if (meMarker) {
+        meMarker.setLatLng(ll);
+        meRing.setLatLng(ll).setRadius(acc);
+      } else {
+        meRing = L.circle(ll, { radius: acc, color: "#1A73E8", weight: 1, opacity: .4, fillColor: "#1A73E8", fillOpacity: .12, interactive: false }).addTo(map);
+        meMarker = L.marker(ll, { icon: meIcon, title: "You are here", keyboard: false, zIndexOffset: 1000 }).addTo(map);
+      }
+      if (first) map.setView(ll, 17);
+    }
+
     $("locate").addEventListener("click", () => {
       if (!navigator.geolocation) return toast("Your browser can’t share your location.");
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const ll = [pos.coords.latitude, pos.coords.longitude];
-          map.setView(ll, 17);
-          if (meMarker) meMarker.setLatLng(ll);
-          else meMarker = L.marker(ll, { icon: L.divIcon({ className: "", html: '<span class="me-pin"></span>', iconSize: [18, 18], iconAnchor: [9, 9] }), title: "You are here" }).addTo(map);
+      if (meLast) map.setView(meLast, Math.max(map.getZoom(), 17));
+      if (meWatch !== null) return;
+      $("locate").classList.add("locating");
+      meWatch = navigator.geolocation.watchPosition(
+        showMe,
+        () => {
+          navigator.geolocation.clearWatch(meWatch);
+          meWatch = null;
+          $("locate").classList.remove("locating");
+          toast("Location is off. Allow location access for this site and try again.");
         },
-        () => toast("Location is off. Allow location access for this site and try again.")
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
       );
     });
 

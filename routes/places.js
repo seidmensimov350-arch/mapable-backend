@@ -12,6 +12,12 @@ const SCORE_COLUMNS = {
   cognitive: "s.cognitive_score",
 };
 
+// Visitor answers to "Is the entrance step-free?"
+const STEP_YES = `(SELECT COUNT(*) FROM verifications v1
+  WHERE v1.place_id = p.id AND v1.accessibility_feature = 'stair_free_entrance' AND v1.reported_value = 'yes')`;
+const STEP_NO = `(SELECT COUNT(*) FROM verifications v2
+  WHERE v2.place_id = p.id AND v2.accessibility_feature = 'stair_free_entrance' AND v2.reported_value = 'no')`;
+
 const PLACE_SELECT = `
   p.id, p.name, p.category, p.address, p.latitude, p.longitude,
   p.source_name, p.source_type,
@@ -21,7 +27,9 @@ const PLACE_SELECT = `
   s.mobility_score, s.vision_score, s.hearing_score, s.cognitive_score,
   EXISTS (
     SELECT 1 FROM restaurant_accessibility_evidence r WHERE r.place_id = p.id
-  ) AS has_restaurant_evidence`;
+  ) AS has_restaurant_evidence,
+  ${STEP_YES} AS step_yes,
+  ${STEP_NO} AS step_no`;
 
 const PLACE_JOINS = `
   FROM places p
@@ -60,6 +68,10 @@ function formatPlace(row) {
         }
       : null,
     has_restaurant_evidence: Boolean(row.has_restaurant_evidence),
+    visitors: {
+      step_free_yes: Number(row.step_yes) || 0,
+      step_free_no: Number(row.step_no) || 0,
+    },
   };
 }
 
@@ -115,6 +127,7 @@ async function listPlaces(req, res, { accessibleOnly = false, needRadius = false
         oa.wheelchair IN ('yes', 'limited')
         OR ${scoreCol} >= ?
         OR EXISTS (SELECT 1 FROM restaurant_accessibility_evidence r2 WHERE r2.place_id = p.id)
+        OR ${STEP_YES} > ${STEP_NO}
       )`);
     } else {
       where.push(`${scoreCol} >= ?`);

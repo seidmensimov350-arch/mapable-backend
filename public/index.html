@@ -2,153 +2,412 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mapable – Accessible Vilnius!</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1F5BD8">
+  <title>Mapable – Accessible Vilnius</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
+    /* Layout: full-screen map; a floating side panel on desktop that becomes a draggable bottom sheet on phones.
+       Type: Atkinson Hyperlegible, a typeface designed for readers with low vision. */
     :root {
-      --bg: #ffffff;
-      --text: #1a1a1a;
-      --muted: #555b66;
-      --border: #d4d4d8;
-      --accent: #1a56db;
-      --yes: #15803d;
-      --limited: #c26a00;
-      --no: #b91c1c;
-      --unknown: #6b7280;
-      --parking: #1d4ed8;
+      --paper: #F3F6FB;
+      --surface: #FFFFFF;
+      --ink: #16233B;
+      --muted: #56637C;
+      --line: #DCE3EE;
+      --signal: #1F5BD8;
+      --signal-ink: #FFFFFF;
+      --signal-soft: #E7EEFD;
+      --yes: #0F7A47;  --yes-soft: #E2F3E9;
+      --limited: #A35C00; --limited-soft: #FBEEDA;
+      --no: #BC2F27;  --no-soft: #FBE5E2;
+      --unknown: #5F6B82; --unknown-soft: #ECEFF5;
+      --pin-yes: #0F7A47; --pin-limited: #C26A00; --pin-no: #BC2F27; --pin-unknown: #7A8599; --pin-parking: #1F5BD8;
+      --shadow: 0 12px 32px rgba(22, 35, 59, .18), 0 2px 6px rgba(22, 35, 59, .08);
+      --font: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+      --radius-panel: 20px;
+      --radius-control: 12px;
+      color-scheme: light;
     }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #0F1729; --surface: #16213A; --ink: #EAF0FA; --muted: #A9B5CB; --line: #2A3858;
+        --signal: #7AA4FF; --signal-ink: #0F1729; --signal-soft: #1E2E52;
+        --yes: #5BD495; --yes-soft: #12301F;
+        --limited: #F2B05A; --limited-soft: #33260F;
+        --no: #FF8277; --no-soft: #3A1B1B;
+        --unknown: #A3AEC3; --unknown-soft: #1F2A44;
+        --shadow: 0 12px 32px rgba(0, 0, 0, .45);
+        color-scheme: dark;
+      }
+    }
+
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     html, body { margin: 0; height: 100%; }
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 16px; color: var(--text); }
-    #map { position: absolute; inset: 0; }
-
-    .card { background: var(--bg); border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.18); }
-
-    .topbar { position: absolute; z-index: 1100; top: 12px; left: 12px; max-width: 760px; width: calc(100% - 24px);
-      display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; }
-    .brand { font-weight: 800; font-size: 22px; margin-right: 4px; }
-    .brand span { color: var(--accent); }
-    .topbar input[type="search"] { flex: 1 1 160px; }
-    select, input, button { font: inherit; min-height: 42px; padding: 8px 10px; border: 1px solid var(--border);
-      border-radius: 8px; background: #fff; color: var(--text); }
+    body { font-family: var(--font); font-size: 16px; line-height: 1.45; color: var(--ink); background: var(--paper); -webkit-font-smoothing: antialiased; }
+    button, input, select { font: inherit; color: inherit; }
     button { cursor: pointer; }
-    button:disabled { opacity: .6; cursor: default; }
-    label.check { display: flex; align-items: center; gap: 6px; }
-    label.check input { min-height: 0; width: 20px; height: 20px; }
-    :focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+    :focus-visible { outline: 3px solid #F5A524; outline-offset: 2px; }
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-    .info { position: absolute; z-index: 1050; left: 12px; bottom: 24px; max-width: 340px; padding: 12px 14px;
-      font-size: 14px; line-height: 1.4; }
-    .info strong.big { font-size: 24px; color: var(--no); }
-    .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; }
-    .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 4px; vertical-align: -1px;
-      border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.3); }
-    #status { color: var(--muted); margin-top: 6px; }
+    #map { position: fixed; inset: 0; background: var(--paper); }
+    .leaflet-container { font-family: var(--font); }
 
-    .panel { position: absolute; z-index: 1200; top: 12px; right: 12px; bottom: 12px; width: 390px; overflow-y: auto; padding: 18px; }
-    .panel[hidden] { display: none; }
-    .panel h2 { margin: 0 40px 4px 0; font-size: 22px; }
-    .close { position: absolute; top: 10px; right: 10px; width: 42px; padding: 0; font-size: 22px; line-height: 1; }
-    .meta { color: var(--muted); margin: 0 0 12px; }
-    .badge { display: inline-block; padding: 6px 12px; border-radius: 999px; color: #fff; font-weight: 700; margin-bottom: 4px; }
-    .section { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
-    .section h3 { font-size: 16px; margin: 0 0 8px; }
-    .row { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
-    .score { display: grid; grid-template-columns: 90px 1fr 36px; align-items: center; gap: 8px; margin: 6px 0; }
-    .bar { height: 10px; background: #e5e7eb; border-radius: 6px; overflow: hidden; }
-    .bar > div { height: 100%; background: var(--accent); }
-    .source { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
-    .btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
-    .linklike { background: none; border: none; padding: 4px 0; min-height: 0; color: var(--accent);
-      text-decoration: underline; text-align: left; }
-    details { margin: 6px 0; }
-    details ul { padding-left: 18px; margin: 6px 0; font-size: 14px; }
+    /* ---------- Panel ---------- */
+    .panel {
+      position: fixed; z-index: 1000; top: 16px; left: 16px; bottom: 16px; width: 400px;
+      display: flex; flex-direction: column; background: var(--surface); border-radius: var(--radius-panel);
+      box-shadow: var(--shadow); overflow: hidden;
+    }
+    .handle { display: none; }
+    .panel-top { padding: 18px 18px 12px; display: grid; gap: 12px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .logo { width: 36px; height: 36px; border-radius: 10px; background: var(--signal); color: var(--signal-ink); display: grid; place-items: center; flex: none; }
+    .logo svg { width: 22px; height: 22px; }
+    .brand h1 { margin: 0; font-size: 1.35rem; line-height: 1.1; letter-spacing: -0.01em; }
+    .brand p { margin: 0; color: var(--muted); font-size: .9rem; }
 
-    .pk-icon { background: var(--parking); color: #fff; font-weight: 800; font-size: 14px; border-radius: 6px;
-      border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; }
+    .search { position: relative; }
+    .search svg { position: absolute; left: 14px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+    .search input {
+      width: 100%; min-height: 48px; padding: 10px 44px 10px 42px; border-radius: var(--radius-control);
+      border: 1.5px solid var(--line); background: var(--paper);
+    }
+    .search input:focus { border-color: var(--signal); outline: none; box-shadow: 0 0 0 3px var(--signal-soft); }
+    .search .clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 1.3rem; }
+    .search .clear:hover { background: var(--line); }
 
-    .toast { position: absolute; z-index: 1300; left: 50%; bottom: 24px; transform: translateX(-50%);
-      background: #111; color: #fff; padding: 10px 16px; border-radius: 8px; }
-    .toast[hidden] { display: none; }
+    .chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip {
+      flex: none; min-height: 40px; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--line);
+      background: var(--surface); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .chip:hover { border-color: var(--muted); }
+    .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); font-weight: 700; }
+    .chip .ico { width: 18px; height: 18px; }
+    .chips.small .chip { min-height: 36px; padding: 6px 12px; font-size: .92rem; }
 
-    @media (max-width: 700px) {
-      .brand { font-size: 18px; width: 100%; }
-      .topbar select, .topbar button { flex: 1 1 45%; }
-      .info { display: none; }
-      .panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 65vh; border-radius: 16px 16px 0 0; }
+    .views { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+    .view { padding: 16px 18px 24px; display: grid; gap: 16px; align-content: start; }
+
+    /* Insight */
+    .insight { background: var(--signal-soft); border-radius: 16px; padding: 14px 16px; display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; align-items: center; }
+    .insight .big { font-size: 2.4rem; font-weight: 700; line-height: 1; color: var(--signal); grid-row: span 2; letter-spacing: -0.02em; }
+    .insight p { margin: 0; font-size: .95rem; }
+    .insight small { color: var(--muted); font-size: .85rem; }
+
+    .list-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .list-head h2 { margin: 0; font-size: 1.05rem; }
+    .list-head span { color: var(--muted); font-size: .88rem; font-variant-numeric: tabular-nums; }
+
+    .places { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+    .place-btn {
+      width: 100%; display: grid; grid-template-columns: 32px 1fr; gap: 12px; align-items: center; text-align: left;
+      padding: 10px; border: 0; background: transparent; border-radius: 12px;
+    }
+    .place-btn:hover, .place-btn:focus-visible { background: var(--paper); }
+    .place-btn .name { font-weight: 700; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .place-btn .sub { color: var(--muted); font-size: .88rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .place-btn > span:last-child { min-width: 0; }
+    .empty { color: var(--muted); padding: 8px 2px; margin: 0; }
+    .more-note { color: var(--muted); font-size: .88rem; margin: 0; }
+
+    /* Status token (shape + symbol, never colour alone) */
+    .tok { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; flex: none; }
+    .tok svg { width: 16px; height: 16px; }
+    .tok.yes { background: var(--pin-yes); }
+    .tok.limited { background: var(--pin-limited); }
+    .tok.no { background: var(--pin-no); }
+    .tok.unknown { background: var(--pin-unknown); }
+    .tok.reported { background: #fff; color: var(--pin-yes); box-shadow: inset 0 0 0 2.5px var(--pin-yes); }
+    .tok.reportedno { background: #fff; color: var(--pin-no); box-shadow: inset 0 0 0 2.5px var(--pin-no); }
+
+    /* ---------- Detail ---------- */
+    .back { justify-self: start; display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--signal); font-weight: 700; padding: 6px 4px; min-height: 40px; }
+    .back svg { width: 18px; height: 18px; }
+    .d-title h2 { margin: 0; font-size: 1.6rem; line-height: 1.15; text-wrap: balance; }
+    .d-title p { margin: 4px 0 0; color: var(--muted); }
+    .verdict { border-radius: 16px; padding: 14px; display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+    .verdict.yes { background: var(--yes-soft); }
+    .verdict.limited { background: var(--limited-soft); }
+    .verdict.no { background: var(--no-soft); }
+    .verdict.unknown { background: var(--unknown-soft); }
+    .verdict.reported { background: var(--yes-soft); }
+    .verdict.reportedno { background: var(--no-soft); }
+    .verdict.reported strong { color: var(--yes); }
+    .verdict.reportedno strong { color: var(--no); }
+    .verdict .tok { width: 44px; height: 44px; }
+    .verdict .tok svg { width: 22px; height: 22px; }
+    .verdict strong { display: block; font-size: 1.1rem; }
+    .verdict.yes strong { color: var(--yes); }
+    .verdict.limited strong { color: var(--limited); }
+    .verdict.no strong { color: var(--no); }
+    .verdict.unknown strong { color: var(--unknown); }
+    .verdict span { font-size: .93rem; }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .btn { min-height: 44px; padding: 10px 16px; border-radius: var(--radius-control); border: 1.5px solid var(--line); background: var(--surface); font-weight: 700; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--ink); }
+    .btn.primary { background: var(--signal); border-color: var(--signal); color: var(--signal-ink); }
+    .btn svg { width: 18px; height: 18px; }
+
+    .section { display: grid; gap: 8px; }
+    .section h3 { margin: 0; font-size: 1.02rem; }
+    .facts { margin: 0; display: grid; gap: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+    .fact { display: flex; justify-content: space-between; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); }
+    .fact:first-child { border-top: 0; }
+    .fact dt { color: var(--muted); }
+    .fact dd { margin: 0; font-weight: 700; text-align: right; }
+    .src { color: var(--muted); font-size: .84rem; margin: 0; }
+    .src a { color: inherit; }
+
+    .score { display: grid; grid-template-columns: 86px 1fr 34px; gap: 10px; align-items: center; font-size: .95rem; }
+    .bar { height: 10px; background: var(--line); border-radius: 6px; overflow: hidden; }
+    .bar > i { display: block; height: 100%; background: var(--signal); border-radius: 6px; }
+    .score b { text-align: right; font-variant-numeric: tabular-nums; }
+    details { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+    details summary { cursor: pointer; font-weight: 700; min-height: 32px; display: flex; align-items: center; }
+    details ul { margin: 6px 0 4px; padding-left: 18px; font-size: .9rem; display: grid; gap: 3px; }
+
+    .parking-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .pk-btn { width: 100%; display: grid; grid-template-columns: 32px 1fr auto; gap: 12px; align-items: center; text-align: left; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+    .pk-btn:hover { border-color: var(--signal); }
+    .pk-tok { width: 32px; height: 32px; border-radius: 8px; background: var(--pin-parking); color: #fff; display: grid; place-items: center; font-weight: 700; }
+    .pk-btn .dist { color: var(--muted); font-size: .88rem; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pk-btn > span:nth-child(2) { min-width: 0; }
+
+    .ask { border-radius: 16px; background: var(--paper); padding: 14px; display: grid; gap: 14px; }
+    .ask h3 { margin: 0; font-size: 1.05rem; }
+    .ask > p { margin: -8px 0 0; color: var(--muted); font-size: .9rem; }
+    .q { display: grid; gap: 6px; }
+    .q-label { font-weight: 700; }
+    .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+    .seg button { flex: 1 1 0; min-width: 84px; min-height: 44px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); display: inline-flex; justify-content: center; align-items: center; gap: 8px; font-weight: 700; }
+    .seg button:hover { border-color: var(--signal); }
+    .seg button[aria-pressed="true"] { border-color: var(--signal); background: var(--signal-soft); color: var(--signal); }
+    .seg .n { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; font-size: .88rem; }
+
+    /* ---------- Map tools ---------- */
+    .tools { position: fixed; z-index: 1000; top: 16px; right: 16px; display: grid; gap: 8px; }
+    .tool { width: 48px; height: 48px; border-radius: 14px; border: 0; background: var(--surface); box-shadow: var(--shadow); display: grid; place-items: center; color: var(--ink); }
+    .tool svg { width: 22px; height: 22px; }
+    .tool.p { font-weight: 700; font-size: 1.15rem; }
+    .tool[aria-pressed="true"] { background: var(--pin-parking); color: #fff; }
+    .tool-group { display: grid; border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+    .tool-group .tool { box-shadow: none; border-radius: 0; }
+    .tool-group .tool + .tool { border-top: 1px solid var(--line); }
+
+    /* Map pins */
+    .pin { width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); display: grid; place-items: center; color: #fff; font: 700 14px/1 var(--font); transition: transform .15s ease; }
+    .pin svg { width: 13px; height: 13px; }
+    .pin.yes { background: var(--pin-yes); }
+    .pin.limited { background: var(--pin-limited); }
+    .pin.no { background: var(--pin-no); }
+    .pin.unknown { background: var(--pin-unknown); width: 20px; height: 20px; font-size: 11px; }
+    .pin.reported { background: #fff; color: var(--pin-yes); border-color: var(--pin-yes); }
+    .pin.reportedno { background: #fff; color: var(--pin-no); border-color: var(--pin-no); }
+    .pin.sel { transform: scale(1.45); box-shadow: 0 0 0 4px rgba(31,91,216,.45), 0 2px 8px rgba(0,0,0,.4); }
+    .pk-pin { width: 26px; height: 26px; border-radius: 7px; background: var(--pin-parking); border: 2.5px solid #fff; color: #fff; font: 700 14px/1 var(--font); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+    .me-pin { width: 18px; height: 18px; border-radius: 50%; background: var(--pin-parking); border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(31,91,216,.25); }
+    .leaflet-popup-content-wrapper { border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+    .leaflet-popup-tip { background: var(--surface); }
+    .leaflet-popup-content { font: 15px/1.4 var(--font); margin: 14px 16px; }
+    .leaflet-container a.leaflet-popup-close-button { color: var(--muted); width: 32px; height: 32px; font-size: 22px; line-height: 30px; }
+    .leaflet-tooltip { font: 700 14px/1.3 var(--font); border-radius: 8px; padding: 4px 8px; }
+    .card-pop { display: grid; gap: 8px; min-width: 230px; }
+    .card-pop h4 { margin: 0 24px 0 0; font-size: 1.1rem; line-height: 1.2; }
+    .card-pop .cat { margin: -6px 0 0; color: var(--muted); font-size: .88rem; }
+    .card-pop .pill { justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; font-weight: 700; font-size: .9rem; }
+    .card-pop .pill .tok { width: 22px; height: 22px; }
+    .card-pop .pill .tok svg { width: 12px; height: 12px; }
+    .card-pop .pill.yes { background: var(--yes-soft); color: var(--yes); }
+    .card-pop .pill.limited { background: var(--limited-soft); color: var(--limited); }
+    .card-pop .pill.no { background: var(--no-soft); color: var(--no); }
+    .card-pop .pill.unknown { background: var(--unknown-soft); color: var(--unknown); }
+    .card-pop .pill.reported { background: var(--yes-soft); color: var(--yes); }
+    .card-pop .pill.reportedno { background: var(--no-soft); color: var(--no); }
+    .card-pop .why { margin: 0; font-size: .9rem; }
+    .card-pop .meta { margin: 0; font-size: .88rem; color: var(--muted); }
+    .card-pop .row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .card-pop .row a, .card-pop .row button { min-height: 36px; padding: 6px 12px; border-radius: 10px; font-weight: 700; font-size: .9rem; text-decoration: none; display: inline-flex; align-items: center; }
+    .card-pop .row a { background: var(--signal); color: var(--signal-ink); }
+    .card-pop .row button, .card-pop .row a.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--ink); }
+    .card-pop .pill.park { background: var(--signal-soft); color: var(--signal); padding-left: 4px; }
+    .card-pop .pill.park .pk-tok { width: 22px; height: 22px; border-radius: 6px; font-size: .8rem; }
+    .pk-facts { margin: 0; display: grid; gap: 2px; font-size: .88rem; }
+    .pk-facts div { display: flex; justify-content: space-between; gap: 12px; }
+    .pk-facts dt { color: var(--muted); }
+    .pk-facts dd { margin: 0; font-weight: 700; text-align: right; }
+
+    .toast { position: fixed; z-index: 1300; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 12px 18px; border-radius: 12px; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+
+    /* ---------- Phone: bottom sheet ---------- */
+    @media (max-width: 720px) {
+      .panel {
+        top: auto; left: 0; right: 0; bottom: 0; width: auto; border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+        height: var(--sheet, 46vh); transition: height .25s ease; padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      body[data-sheet="peek"] { --sheet: 210px; }
+      body[data-sheet="half"] { --sheet: 52vh; }
+      body[data-sheet="full"] { --sheet: 88vh; }
+      .handle { display: block; border: 0; background: transparent; padding: 10px 0 2px; width: 100%; }
+      .handle::before { content: ""; display: block; width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto; }
+      .panel-top { padding: 4px 16px 10px; gap: 10px; }
+      .brand { display: none; }
+      .view { padding: 14px 16px 24px; }
+      .tools { top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px; }
+      .leaflet-bottom { bottom: var(--sheet, 46vh); transition: bottom .25s ease; }
+      .toast { bottom: calc(var(--sheet, 46vh) + 12px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
     }
   </style>
 </head>
-<body>
-  <div id="map" aria-label="Map of Vilnius"></div>
+<body data-sheet="half">
+  <div id="map" role="application" aria-label="Map of Vilnius"></div>
 
-  <header class="topbar card">
-    <div class="brand">Map<span>able</span></div>
-    <label class="sr-only" for="search">Search places</label>
-    <input id="search" type="search" placeholder="Search a place…">
-    <label class="sr-only" for="need">Accessible for</label>
-    <select id="need">
-      <option value="">All places</option>
-      <option value="mobility">♿ Wheelchair accessible</option>
-      <option value="vision">Blind / low vision</option>
-      <option value="hearing">Deaf / hard of hearing</option>
-      <option value="cognitive">Cognitive needs</option>
-    </select>
-    <label class="sr-only" for="category">Category</label>
-    <select id="category"><option value="">All categories</option></select>
-    <label class="check"><input id="parking" type="checkbox" checked> Parking</label>
-    <button id="locate" type="button">📍 Near me</button>
-  </header>
+  <aside class="panel" id="panel" aria-label="Places">
+    <button class="handle" id="handle" type="button" aria-label="Resize panel"></button>
+    <div class="panel-top">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.5" r="1.8" fill="currentColor" stroke="none"/><path d="M11 8v5h5l2.5 5"/><path d="M8.2 11.2A5.5 5.5 0 1 0 15 18.6"/></svg>
+        </div>
+        <div>
+          <h1>Mapable</h1>
+          <p>Accessible places in Vilnius</p>
+        </div>
+      </div>
 
-  <aside class="info card">
-    <div id="stats">Loading statistics…</div>
-    <div class="legend">
-      <span><span class="dot" style="background:var(--yes)"></span>Accessible</span>
-      <span><span class="dot" style="background:var(--limited)"></span>Partly</span>
-      <span><span class="dot" style="background:var(--no)"></span>Not accessible</span>
-      <span><span class="dot" style="background:var(--unknown)"></span>Unknown</span>
-      <span><span class="dot" style="background:var(--parking);border-radius:3px"></span>Disabled parking</span>
+      <div class="search">
+        <label class="sr-only" for="search">Search places</label>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="search" type="search" placeholder="Search a café, shop, museum…" autocomplete="off">
+        <button class="clear" id="clear" type="button" aria-label="Clear search" hidden>×</button>
+      </div>
+
+      <div class="chips" id="needs" role="group" aria-label="Accessible for">
+        <button class="chip" type="button" data-need="" aria-pressed="true">All places</button>
+        <button class="chip" type="button" data-need="mobility" aria-pressed="false">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.5" r="1.8" fill="currentColor" stroke="none"/><path d="M11 8v5h5l2.5 5"/><path d="M8.2 11.2A5.5 5.5 0 1 0 15 18.6"/></svg>Wheelchair</button>
+        <button class="chip" type="button" data-need="vision" aria-pressed="false">Low vision</button>
+        <button class="chip" type="button" data-need="hearing" aria-pressed="false">Hearing</button>
+        <button class="chip" type="button" data-need="cognitive" aria-pressed="false">Cognitive</button>
+      </div>
+      <div class="chips small" id="cats" role="group" aria-label="Category">
+        <button class="chip" type="button" data-cat="" aria-pressed="true">Everything</button>
+      </div>
     </div>
-    <div id="status" aria-live="polite"></div>
+
+    <div class="views" id="views">
+      <section class="view" id="listView" aria-live="polite">
+        <div class="insight" id="insight">
+          <span class="big">…</span>
+          <p>Loading accessibility data for Vilnius…</p>
+        </div>
+        <div class="list-head">
+          <h2>Places in view</h2>
+          <span id="count"></span>
+        </div>
+        <ul class="places" id="list"></ul>
+        <p class="more-note" id="more" hidden></p>
+      </section>
+      <section class="view" id="detailView" hidden aria-live="polite"></section>
+    </div>
   </aside>
 
-  <aside id="panel" class="panel card" hidden aria-live="polite">
-    <button class="close" type="button" id="close" aria-label="Close details">×</button>
-    <div id="panelBody"></div>
-  </aside>
+  <div class="tools">
+    <button class="tool" id="locate" type="button" aria-label="Show places near me" title="Near me">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
+    <button class="tool p" id="parking" type="button" aria-pressed="true" aria-label="Show disabled parking" title="Disabled parking">P</button>
+    <div class="tool-group">
+      <button class="tool" id="zin" type="button" aria-label="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="tool" id="zout" type="button" aria-label="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+    </div>
+  </div>
 
-  <div id="toast" class="toast" role="status" hidden></div>
+  <div class="toast" id="toast" role="status" hidden></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const API = "/api";
-    const COLORS = { yes: "#15803d", limited: "#c26a00", no: "#b91c1c", unknown: "#6b7280" };
-    const LABELS = {
-      yes: "♿ Wheelchair accessible",
-      limited: "Partly accessible",
-      no: "Not wheelchair accessible",
-      unknown: "No accessibility info yet",
-    };
-    const DISABILITY_LABELS = { mobility: "Mobility", vision: "Vision", hearing: "Hearing", cognitive: "Cognitive" };
-
     const $ = (id) => document.getElementById(id);
-    const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? esc(u) : "");
-    const pretty = (s) => { const t = String(s || "").replace(/_/g, " "); return t.charAt(0).toUpperCase() + t.slice(1); };
+    const isPhone = () => window.matchMedia("(max-width: 720px)").matches;
 
-    let visitorId;
-    try {
-      visitorId = localStorage.getItem("mapable_visitor");
-      if (!visitorId) {
-        visitorId = "v-" + Math.random().toString(36).slice(2, 12);
-        localStorage.setItem("mapable_visitor", visitorId);
-      }
-    } catch (e) {
-      visitorId = "v-" + Math.random().toString(36).slice(2, 12);
+    const SYM = {
+      yes: '<svg viewBox="0 0 16 16"><path d="M3.3 8.6l3 3 6.4-7.2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      limited: '<svg viewBox="0 0 16 16"><path d="M3.8 8h8.4" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>',
+      no: '<svg viewBox="0 0 16 16"><path d="M4.4 4.4l7.2 7.2M11.6 4.4l-7.2 7.2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>',
+      unknown: "?",
+    };
+    SYM.reported = SYM.yes;
+    SYM.reportedno = SYM.no;
+    const LABEL = {
+      yes: "Wheelchair accessible", reported: "Reported accessible", limited: "Partly accessible",
+      unknown: "Not checked yet", reportedno: "Reported not accessible", no: "Not wheelchair accessible",
+    };
+    const RANK = { yes: 0, reported: 1, limited: 2, unknown: 3, reportedno: 4, no: 5 };
+    const CONFIRM_VOTES = 3; // visitor answers needed to confirm a place
+    const zFor = (st) => (5 - RANK[st]) * 10;
+    const NEED_LABEL = { mobility: "Mobility", vision: "Vision", hearing: "Hearing", cognitive: "Cognitive" };
+    const VALUE_WORD = { yes: "Yes", no: "No", limited: "Partly", designated: "Yes", unknown: "Not recorded" };
+
+    function prettyCat(s) {
+      const t = String(s || "").split(":").pop().replace(/_/g, " ").trim();
+      return t ? t.charAt(0).toUpperCase() + t.slice(1) : "Place";
     }
+
+    function statusOf(p) {
+      const w = p.accessibility.wheelchair;
+      const m = p.official_scores ? p.official_scores.mobility : null;
+      if (w === "yes" || p.has_restaurant_evidence || (m != null && m >= 50)) return "yes";
+      if (w === "limited" || (m != null && m > 0)) return "limited";
+      if (w === "no" || m === 0) return "no";
+      // No other source: let visitor answers decide
+      const v = p.visitors || {};
+      const y = v.step_free_yes || 0, n = v.step_free_no || 0;
+      if (y > n) return y >= CONFIRM_VOTES ? "yes" : "reported";
+      if (n > y) return n >= CONFIRM_VOTES ? "no" : "reportedno";
+      return "unknown";
+    }
+
+    function plural(n, word) { return `${n} ${word}${n === 1 ? "" : "s"}`; }
+
+    function reasonOf(p) {
+      const w = p.accessibility.wheelchair;
+      const m = p.official_scores ? p.official_scores.mobility : null;
+      if (w === "yes") return "Marked wheelchair accessible on OpenStreetMap.";
+      if (p.has_restaurant_evidence) return "Listed as adapted for disabled visitors on Meniu.lt.";
+      if (m != null && m >= 50) return `Official mobility score: ${Math.round(m)} out of 100.`;
+      if (w === "limited") return "Marked partly accessible on OpenStreetMap.";
+      if (m != null && m > 0) return `Official mobility score: ${Math.round(m)} out of 100.`;
+      if (w === "no") return "Marked not wheelchair accessible on OpenStreetMap.";
+      if (m === 0) return "Official mobility score: 0 out of 100.";
+      const v = p.visitors || {};
+      const y = v.step_free_yes || 0, n = v.step_free_no || 0;
+      if (y > n && y >= CONFIRM_VOTES) return `Confirmed step-free by ${plural(y, "visitor")}.`;
+      if (y > n) return `Reported step-free by ${plural(y, "visitor")}. ${CONFIRM_VOTES} matching answers confirm it.`;
+      if (n > y && n >= CONFIRM_VOTES) return `Confirmed not step-free by ${plural(n, "visitor")}.`;
+      if (n > y) return `Reported not step-free by ${plural(n, "visitor")}. ${CONFIRM_VOTES} matching answers confirm it.`;
+      if (y > 0) return `Visitors disagree: ${y} said step-free, ${n} said not. Been there? Add your answer below.`;
+      return "No source has checked this place yet. Been there? Add what you saw below.";
+    }
+
+    let visitorId = "v-" + Math.random().toString(36).slice(2, 12);
+    let myVotes = {};
+    try {
+      visitorId = localStorage.getItem("mapable_visitor") || visitorId;
+      localStorage.setItem("mapable_visitor", visitorId);
+      myVotes = JSON.parse(localStorage.getItem("mapable_votes") || "{}");
+    } catch (e) { /* storage unavailable: votes still work, just not remembered */ }
 
     async function getJSON(url, options) {
       const res = await fetch(url, options);
@@ -166,218 +425,403 @@
       toastTimer = setTimeout(() => (t.hidden = true), 3000);
     }
 
-    function statusOf(p) {
-      const w = p.accessibility.wheelchair;
-      const m = p.official_scores ? p.official_scores.mobility : null;
-      if (w === "yes" || p.has_restaurant_evidence || (m != null && m >= 50)) return "yes";
-      if (w === "limited" || (m != null && m > 0)) return "limited";
-      if (w === "no" || m === 0) return "no";
-      return "unknown";
-    }
+    /* ---------- Bottom sheet (phone) ---------- */
+    const SHEET_ORDER = ["peek", "half", "full"];
+    function setSheet(state) { document.body.dataset.sheet = state; }
+    $("handle").addEventListener("click", () => {
+      const i = SHEET_ORDER.indexOf(document.body.dataset.sheet);
+      setSheet(SHEET_ORDER[(i + 1) % SHEET_ORDER.length]);
+    });
+    $("search").addEventListener("focus", () => { if (isPhone()) setSheet("full"); });
 
-    // ---------- Map ----------
+    /* ---------- Map ---------- */
     const map = L.map("map", { zoomControl: false }).setView([54.6872, 25.2797], 15);
-    L.control.zoom({ position: "bottomright" }).addTo(map);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
+    $("zin").addEventListener("click", () => map.zoomIn());
+    $("zout").addEventListener("click", () => map.zoomOut());
+
+    const icons = {};
+    function pinIcon(st, selected) {
+      const key = st + (selected ? "-sel" : "");
+      if (!icons[key]) {
+        const size = st === "unknown" && !selected ? 20 : 26;
+        icons[key] = L.divIcon({
+          className: "",
+          html: `<span class="pin ${st}${selected ? " sel" : ""}">${SYM[st]}</span>`,
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2],
+        });
+      }
+      return icons[key];
+    }
 
     const placesLayer = L.layerGroup().addTo(map);
     const parkingLayer = L.layerGroup();
+    const markers = new Map();
     const parkingMarkers = new Map();
-    let selected = null;
+    let selectedId = null;
+    let current = [];
 
-    // ---------- Places ----------
+    const state = { need: "", cat: "", q: "" };
+
+    /* ---------- Places ---------- */
     let loadTimer;
     let requestId = 0;
 
     function placeQuery() {
       const params = new URLSearchParams();
-      const q = $("search").value.trim();
-      if (q) {
-        params.set("q", q);
+      if (state.q) {
+        params.set("q", state.q);
         params.set("limit", "100");
       } else {
         const b = map.getBounds();
         params.set("bbox", [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((n) => n.toFixed(6)).join(","));
         params.set("limit", "500");
       }
-      if ($("need").value) params.set("disability", $("need").value);
-      if ($("category").value) params.set("category", $("category").value);
+      if (state.need) params.set("disability", state.need);
+      if (state.cat) params.set("category", state.cat);
       return params.toString();
     }
 
     async function loadPlaces(options = {}) {
       const id = ++requestId;
-      $("status").textContent = "Loading places…";
+      $("count").textContent = "Loading…";
       try {
         const data = await getJSON(`${API}/places?${placeQuery()}`);
         if (id !== requestId) return;
-        placesLayer.clearLayers();
-        for (const p of data.places) {
-          const st = statusOf(p);
-          L.circleMarker([p.latitude, p.longitude], {
-            radius: 8, color: "#fff", weight: 2, fillColor: COLORS[st], fillOpacity: 0.95,
-          })
-            .bindTooltip(`${esc(p.name)} — ${LABELS[st]}`)
-            .on("click", () => openPlace(p.id))
-            .addTo(placesLayer);
+        current = data.places.map((p) => ({ ...p, st: statusOf(p) }));
+        drawMarkers();
+        renderList(data.count);
+        if (options.fit && current.length) {
+          const pad = isPhone() ? [40, 40] : [60, 60];
+          map.fitBounds(L.latLngBounds(current.map((p) => [p.latitude, p.longitude])), {
+            maxZoom: 17,
+            paddingTopLeft: isPhone() ? pad : [440, 40],
+            paddingBottomRight: isPhone() ? [40, window.innerHeight * 0.5] : pad,
+          });
         }
-        if (options.fit && data.places.length) {
-          map.fitBounds(L.latLngBounds(data.places.map((p) => [p.latitude, p.longitude])), { maxZoom: 17, padding: [60, 60] });
-        }
-        $("status").textContent = data.count >= 500
-          ? "Showing 500 places — zoom in to see all"
-          : `${data.count} places shown`;
       } catch (err) {
-        if (id === requestId) $("status").textContent = "Could not load places: " + err.message;
+        if (id === requestId) {
+          $("count").textContent = "";
+          $("list").innerHTML = `<li><p class="empty">Places could not be loaded (${esc(err.message)}). Check your connection and move the map to try again.</p></li>`;
+        }
       }
     }
+
+    function drawMarkers() {
+      placesLayer.clearLayers();
+      markers.clear();
+      for (const p of current) {
+        const m = L.marker([p.latitude, p.longitude], {
+          icon: pinIcon(p.st, p.id === selectedId),
+          title: `${p.name}: ${LABEL[p.st]}`,
+          keyboard: false,
+          zIndexOffset: p.id === selectedId ? 1000 : zFor(p.st),
+        }).on("click", () => openPlace(p.id));
+        if (!isPhone()) m.bindTooltip(esc(p.name), { direction: "top", offset: [0, -12] });
+        m.addTo(placesLayer);
+        markers.set(p.id, m);
+      }
+    }
+
+    let lastCount = 0;
+    function renderList(count) {
+      lastCount = count;
+      const sorted = [...current].sort((a, b) => RANK[a.st] - RANK[b.st] || a.name.localeCompare(b.name));
+      const shown = sorted.slice(0, 60);
+      $("count").textContent = count >= 500 ? "500+ found" : `${count} found`;
+      $("list").innerHTML = shown.length
+        ? shown.map((p) => `<li><button class="place-btn" type="button" data-id="${p.id}">
+            <span class="tok ${p.st}" aria-hidden="true">${SYM[p.st]}</span>
+            <span><span class="name">${esc(p.name)}</span><span class="sub">${esc(prettyCat(p.category))} · ${LABEL[p.st]}</span></span>
+          </button></li>`).join("")
+        : `<li><p class="empty">No places match here. Zoom out, move the map, or choose “All places”.</p></li>`;
+      const more = $("more");
+      if (sorted.length > shown.length || count >= 500) {
+        more.hidden = false;
+        more.textContent = count >= 500 ? "Zoom in to see every place in this area." : `Showing the first 60 of ${sorted.length}. Zoom in to narrow the list.`;
+      } else {
+        more.hidden = true;
+      }
+    }
+
+    $("list").addEventListener("click", (e) => {
+      const b = e.target.closest(".place-btn");
+      if (b) openPlace(Number(b.dataset.id), { pan: true });
+    });
 
     function scheduleLoad() {
       clearTimeout(loadTimer);
       loadTimer = setTimeout(() => loadPlaces(), 300);
     }
+    map.on("moveend", () => { if (!state.q) scheduleLoad(); });
 
-    map.on("moveend", scheduleLoad);
-    $("need").addEventListener("change", () => loadPlaces());
-    $("category").addEventListener("change", () => loadPlaces());
-    $("search").addEventListener("input", () => {
-      clearTimeout(loadTimer);
-      loadTimer = setTimeout(() => loadPlaces({ fit: true }), 400);
+    function pressOnly(group, btn) {
+      group.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", String(c === btn)));
+    }
+    $("needs").addEventListener("click", (e) => {
+      const b = e.target.closest(".chip");
+      if (!b) return;
+      pressOnly($("needs"), b);
+      state.need = b.dataset.need;
+      showList();
+      loadPlaces();
+    });
+    $("cats").addEventListener("click", (e) => {
+      const b = e.target.closest(".chip");
+      if (!b) return;
+      pressOnly($("cats"), b);
+      state.cat = b.dataset.cat;
+      showList();
+      loadPlaces();
     });
 
-    // ---------- Place details ----------
-    async function openPlace(id) {
-      $("panel").hidden = false;
-      $("panelBody").innerHTML = "<p>Loading…</p>";
-      try {
-        const p = await getJSON(`${API}/places/${id}`);
-        renderPlace(p);
-      } catch (err) {
-        $("panelBody").innerHTML = `<p>Could not load this place: ${esc(err.message)}</p>`;
+    $("search").addEventListener("input", () => {
+      state.q = $("search").value.trim();
+      $("clear").hidden = !state.q;
+      clearTimeout(loadTimer);
+      loadTimer = setTimeout(() => { showList(); loadPlaces({ fit: !!state.q }); }, 400);
+    });
+    $("clear").addEventListener("click", () => {
+      $("search").value = "";
+      state.q = "";
+      $("clear").hidden = true;
+      showList();
+      loadPlaces();
+      $("search").focus();
+    });
+
+    /* ---------- Views ---------- */
+    function showMapCard(p) {
+      const st = statusOf(p);
+      const pk = (p.nearby_parking || [])[0];
+      const html = `<div class="card-pop">
+        <h4>${esc(p.name)}</h4>
+        <p class="cat">${esc(prettyCat(p.category))}${p.address ? " · " + esc(p.address) : ""}</p>
+        <span class="pill ${st}"><span class="tok ${st}" aria-hidden="true">${SYM[st]}</span>${LABEL[st]}</span>
+        <p class="why">${esc(reasonOf(p))}</p>
+        ${p.official_scores && p.official_scores.mobility != null ? `<p class="meta">Official mobility score: ${Math.round(p.official_scores.mobility)} / 100</p>` : ""}
+        <p class="meta">${pk ? `Nearest disabled parking: ${pk.distance_m} m` : "No disabled parking within 500 m"}</p>
+        <div class="row">
+          <a href="https://www.google.com/maps/dir/?api=1&destination=${p.latitude},${p.longitude}" target="_blank" rel="noopener">Directions</a>
+          <button type="button" data-details>All details</button>
+        </div>
+      </div>`;
+      L.popup({ offset: [0, -10], maxWidth: 300, autoPanPaddingTopLeft: [440, 20] })
+        .setLatLng([p.latitude, p.longitude])
+        .setContent(html)
+        .openOn(map);
+    }
+
+    map.on("popupopen", (e) => {
+      const el = e.popup.getElement();
+      const b = el && el.querySelector("[data-details]");
+      if (b) b.addEventListener("click", () => {
+        $("views").scrollTop = 0;
+        const t = $("detailView").querySelector(".section");
+        if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+
+    function showList() {
+      map.closePopup();
+      $("detailView").hidden = true;
+      $("listView").hidden = false;
+      select(null);
+    }
+
+    function select(id) {
+      const prev = selectedId;
+      selectedId = id;
+      for (const pid of [prev, id]) {
+        if (pid == null) continue;
+        const m = markers.get(pid);
+        const p = current.find((x) => x.id === pid);
+        if (m && p) {
+          m.setIcon(pinIcon(p.st, pid === selectedId));
+          m.setZIndexOffset(pid === selectedId ? 1000 : zFor(p.st));
+        }
       }
     }
 
-    function row(label, value) {
-      return `<div class="row"><span>${esc(label)}</span><b>${esc(value)}</b></div>`;
+    async function openPlace(id, opts = {}) {
+      $("listView").hidden = true;
+      const dv = $("detailView");
+      dv.hidden = false;
+      dv.innerHTML = `<p class="empty">Loading…</p>`;
+      $("views").scrollTop = 0;
+      if (isPhone() && document.body.dataset.sheet === "peek") setSheet("half");
+      try {
+        const p = await getJSON(`${API}/places/${id}`);
+        renderPlace(p);
+        select(p.id);
+        if (opts.pan || isPhone()) focusOn([p.latitude, p.longitude]);
+        if (!isPhone()) showMapCard(p);
+      } catch (err) {
+        dv.innerHTML = `<button class="back" type="button" data-back>${BACK_ICON} All places</button><p class="empty">This place could not be loaded (${esc(err.message)}). Try again in a moment.</p>`;
+      }
     }
 
-    function scoreBar(label, value) {
+    function focusOn(latlng) {
+      const pt = map.project(latlng, map.getZoom());
+      if (isPhone()) {
+        const sheetPx = $("panel").getBoundingClientRect().height;
+        pt.y += sheetPx / 2;
+      } else {
+        pt.x -= 216;
+      }
+      map.panTo(map.unproject(pt, map.getZoom()), { animate: true });
+    }
+
+    const BACK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
+    const DIR_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8z"/></svg>';
+
+    function fact(label, value) {
+      return `<div class="fact"><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`;
+    }
+    function scoreRow(label, value) {
       if (value == null) return "";
-      const pct = Math.max(0, Math.min(100, Number(value)));
-      return `<div class="score"><span>${esc(label)}</span>
-        <div class="bar" role="img" aria-label="${esc(label)} ${Math.round(pct)} out of 100"><div style="width:${pct}%"></div></div>
-        <b>${Math.round(pct)}</b></div>`;
+      const v = Math.max(0, Math.min(100, Number(value)));
+      return `<div class="score"><span>${esc(label)}</span><div class="bar" role="img" aria-label="${esc(label)} ${Math.round(v)} out of 100"><i style="width:${v}%"></i></div><b>${Math.round(v)}</b></div>`;
     }
-
     function question(placeId, feature, text, options, votes) {
       const counts = votes[feature] || {};
-      const summary = options.map(([val, label]) => `${label}: ${counts[val] || 0}`).join(" · ");
-      return `<p style="margin:10px 0 4px"><b>${esc(text)}</b></p>
-        <div class="btns">${options.map(([val, label]) =>
-          `<button type="button" data-place="${placeId}" data-feature="${feature}" data-value="${val}">${label}</button>`).join("")}</div>
-        <p class="source">${summary}</p>`;
+      const mine = myVotes[placeId + ":" + feature];
+      return `<div class="q"><span class="q-label">${esc(text)}</span><div class="seg">${options.map(([val, label]) =>
+        `<button type="button" data-place="${placeId}" data-feature="${feature}" data-value="${val}" aria-pressed="${mine === val}">${label}<span class="n">${counts[val] || 0}</span></button>`
+      ).join("")}</div></div>`;
+    }
+    function walk(m) {
+      const min = Math.max(1, Math.round(m / 60));
+      return `${m} m, about ${min} min`;
     }
 
     function renderPlace(p) {
       const st = statusOf(p);
       const a = p.accessibility;
-      const parts = [];
+      const h = [];
 
-      parts.push(`<h2>${esc(p.name)}</h2>`);
-      parts.push(`<p class="meta">${esc(pretty(p.category))}${p.address ? " · " + esc(p.address) : ""}</p>`);
-      parts.push(`<span class="badge" style="background:${COLORS[st]}">${LABELS[st]}</span>`);
+      h.push(`<button class="back" type="button" data-back>${BACK_ICON} All places</button>`);
+      h.push(`<div class="d-title"><h2>${esc(p.name)}</h2><p>${esc(prettyCat(p.category))}${p.address ? " · " + esc(p.address) : ""}</p></div>`);
+      h.push(`<div class="verdict ${st}"><span class="tok ${st}" aria-hidden="true">${SYM[st]}</span><div><strong>${LABEL[st]}</strong><span>${esc(reasonOf(p))}</span></div></div>`);
 
-      const facts = [];
-      if (a.wheelchair !== "unknown") facts.push(row("Wheelchair access (OpenStreetMap)", pretty(a.wheelchair)));
-      if (a.toilets_wheelchair !== "unknown") facts.push(row("Accessible toilet (OpenStreetMap)", pretty(a.toilets_wheelchair)));
-      for (const e of p.restaurant_evidence || []) {
-        const url = safeUrl(e.source_url);
-        facts.push(`<div class="row"><span>${esc(e.accessibility_claim)} (${esc(e.source_name)})</span>${url ? `<a href="${url}" target="_blank" rel="noopener">Source</a>` : ""}</div>`);
-      }
-      parts.push(`<div class="section"><h3>What the data says</h3>${facts.length ? facts.join("")
-        : "<p class='source'>No accessibility data from any source yet. You can help below.</p>"}</div>`);
+      const pk = p.nearby_parking || [];
+      h.push(`<div class="actions">
+        <a class="btn primary" href="https://www.google.com/maps/dir/?api=1&destination=${p.latitude},${p.longitude}" target="_blank" rel="noopener">${DIR_ICON} Directions</a>
+        ${pk.length ? `<button class="btn" type="button" data-parking="${pk[0].id}"><span class="pk-tok" style="width:22px;height:22px;border-radius:6px;font-size:.8rem">P</span> Nearest parking, ${pk[0].distance_m} m</button>` : ""}
+      </div>`);
+
+      const facts = [
+        fact("Wheelchair access", VALUE_WORD[a.wheelchair] || a.wheelchair),
+        fact("Accessible toilet", VALUE_WORD[a.toilets_wheelchair] || a.toilets_wheelchair),
+      ];
+      const ev = p.restaurant_evidence || [];
+      h.push(`<div class="section"><h3>Accessibility details</h3><dl class="facts">${facts.join("")}</dl>
+        <p class="src">Source: OpenStreetMap${ev.length ? ev.map((e) => {
+          const u = safeUrl(e.source_url);
+          return `, ${u ? `<a href="${u}" target="_blank" rel="noopener">${esc(e.source_name)}</a>` : esc(e.source_name)} (${esc(e.accessibility_claim)})`;
+        }).join("") : ""}</p></div>`);
 
       if (p.official_scores) {
         const s = p.official_scores;
-        let html = `<div class="section"><h3>Official accessibility assessment</h3>`;
-        for (const k of ["mobility", "vision", "hearing", "cognitive"]) html += scoreBar(DISABILITY_LABELS[k], s[k]);
+        let html = `<div class="section"><h3>Official assessment</h3>`;
+        for (const k of ["mobility", "vision", "hearing", "cognitive"]) html += scoreRow(NEED_LABEL[k], s[k]);
         for (const [type, items] of Object.entries(p.official_assessments || {})) {
-          html += `<details><summary>${esc(type)} — ${items.length} criteria</summary><ul>${items.map((i) =>
+          html += `<details><summary>${esc(type)}: ${items.length} criteria</summary><ul>${items.map((i) =>
             `<li>${esc(i.criterion)}: <b>${i.score == null ? "–" : esc(i.score)}</b></li>`).join("")}</ul></details>`;
         }
-        html += `<p class="source">Source: Lithuanian Open Data Portal (data.gov.lt)</p></div>`;
-        parts.push(html);
+        html += `<p class="src">Source: Lithuanian Open Data Portal (data.gov.lt)</p></div>`;
+        h.push(html);
       }
 
-      const pk = p.nearby_parking || [];
-      parts.push(`<div class="section"><h3>Accessible parking within 500 m</h3>${pk.length
-        ? pk.map((x) => `<button class="linklike" type="button" data-parking="${x.id}">🅿 ${esc(x.address || "Parking")} — ${x.number_of_places || "?"} space(s), ${x.distance_m} m</button>`).join("<br>")
-        : "<p class='source'>None found within 500 m.</p>"}<p class="source">Source: JUDU (Vilnius)</p></div>`);
+      h.push(`<div class="section"><h3>Disabled parking within 500 m</h3>${pk.length
+        ? `<ul class="parking-list">${pk.map((x) => `<li><button class="pk-btn" type="button" data-parking="${x.id}">
+            <span class="pk-tok" aria-hidden="true">P</span>
+            <span>${esc(x.address || "Parking")}<br><small class="src">${x.number_of_places || "?"} space${x.number_of_places === 1 ? "" : "s"}${x.parking_space_type ? ", " + esc(x.parking_space_type) : ""}</small></span>
+            <span class="dist">${walk(x.distance_m)}</span></button></li>`).join("")}</ul>`
+        : `<p class="src">No disabled parking spaces found within 500 m.</p>`}
+        <p class="src">Source: JUDU, Vilnius traffic authority</p></div>`);
 
       const v = p.verifications || {};
-      parts.push(`<div class="section"><h3>Been here? Help others</h3>
+      h.push(`<div class="ask"><h3>Been here? Help the next visitor</h3><p>Your answers are shown to everyone and fill gaps the official data misses.</p>
         ${question(p.id, "stair_free_entrance", "Is the entrance step-free?", [["yes", "Yes"], ["no", "No"]], v)}
         ${question(p.id, "noise_level", "How noisy is it?", [["quiet", "Quiet"], ["moderate", "Moderate"], ["loud", "Loud"]], v)}
+        ${question(p.id, "assistance_animals", "Are assistance dogs welcome?", [["yes", "Yes"], ["no", "No"]], v)}
       </div>`);
 
-      $("panelBody").innerHTML = parts.join("");
-
-      if (selected) map.removeLayer(selected);
-      selected = L.circleMarker([p.latitude, p.longitude], {
-        radius: 15, color: "#1a56db", weight: 4, fill: false, interactive: false,
-      }).addTo(map);
+      $("detailView").innerHTML = h.join("");
     }
 
-    $("panelBody").addEventListener("click", async (e) => {
+    $("detailView").addEventListener("click", async (e) => {
       const btn = e.target.closest("button");
       if (!btn) return;
-
-      if (btn.dataset.parking) {
-        showParking(Number(btn.dataset.parking));
-        return;
-      }
-
+      if (btn.hasAttribute("data-back")) { showList(); return; }
+      if (btn.dataset.parking) { showParking(Number(btn.dataset.parking)); return; }
       if (btn.dataset.feature) {
+        const { place, feature, value } = btn.dataset;
         btn.disabled = true;
         try {
-          await getJSON(`${API}/places/${btn.dataset.place}/verifications`, {
+          await getJSON(`${API}/places/${place}/verifications`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              visitor_id: visitorId,
-              accessibility_feature: btn.dataset.feature,
-              reported_value: btn.dataset.value,
-            }),
+            body: JSON.stringify({ visitor_id: visitorId, accessibility_feature: feature, reported_value: value }),
           });
-          toast("Thanks! Your answer was saved.");
-          openPlace(Number(btn.dataset.place));
+          myVotes[place + ":" + feature] = value;
+          try { localStorage.setItem("mapable_votes", JSON.stringify(myVotes)); } catch (err) { /* ignore */ }
+          const p = await getJSON(`${API}/places/${place}`);
+          const scroll = $("views").scrollTop;
+          renderPlace(p);
+          $("views").scrollTop = scroll;
+
+          // Update the pin, the map card and the statistics right away
+          const st = statusOf(p);
+          const i = current.findIndex((x) => x.id === p.id);
+          if (i >= 0) current[i] = { ...current[i], visitors: p.visitors, st };
+          const m = markers.get(p.id);
+          if (m) m.setIcon(pinIcon(st, true));
+          if (!isPhone() && document.querySelector(".leaflet-popup .card-pop")) showMapCard(p);
+          renderList(lastCount);
+          loadStats();
+          toast(feature === "stair_free_entrance" ? `Saved. This place now shows: ${LABEL[st]}.` : "Thanks, your answer is saved.");
         } catch (err) {
-          toast("Could not save: " + err.message);
+          toast("Your answer was not saved: " + err.message);
           btn.disabled = false;
         }
       }
     });
 
-    $("close").addEventListener("click", () => {
-      $("panel").hidden = true;
-      if (selected) { map.removeLayer(selected); selected = null; }
-    });
-
-    // ---------- Parking ----------
-    const parkingIcon = L.divIcon({ className: "pk-icon", html: "P", iconSize: [24, 24] });
+    /* ---------- Parking ---------- */
+    const parkingIcon = L.divIcon({ className: "", html: '<span class="pk-pin">P</span>', iconSize: [26, 26], iconAnchor: [13, 13] });
     let parkingLoaded = false;
 
     async function loadParking() {
       if (parkingLoaded) return;
       const data = await getJSON(`${API}/parking`);
       for (const pk of data.parking) {
-        const m = L.marker([pk.latitude, pk.longitude], { icon: parkingIcon, title: "Accessible parking " + (pk.address || "") })
-          .bindPopup(`<b>Accessible parking</b><br>${esc(pk.address || "")}<br>${pk.number_of_places || "?"} space(s)` +
-            `${pk.parking_space_dimensions ? " · " + esc(pk.parking_space_dimensions) : ""}` +
-            `${pk.positioning_mode ? "<br>" + esc(pk.positioning_mode) : ""}<br><span class="source">Source: JUDU</span>`);
+        const spaces = pk.number_of_places || "?";
+        const details = [
+          pk.parking_space_type && ["Type", pk.parking_space_type],
+          pk.parking_space_dimensions && ["Size", pk.parking_space_dimensions],
+          pk.positioning_mode && ["Layout", pk.positioning_mode],
+          pk.lower_sides && ["Lowered kerb", pk.lower_sides],
+          pk.disembarkation_area && ["Drop-off area", pk.disembarkation_area],
+        ].filter(Boolean);
+        const card = `<div class="card-pop">
+          <h4>${esc(pk.address || "Disabled parking")}</h4>
+          <p class="cat">Disabled parking</p>
+          <span class="pill park"><span class="pk-tok" aria-hidden="true">P</span>${spaces} space${spaces === 1 ? "" : "s"} for disabled drivers</span>
+          ${details.length ? `<dl class="pk-facts">${details.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
+          ${pk.comment ? `<p class="why">${esc(pk.comment)}</p>` : ""}
+          <p class="meta">Source: JUDU, Vilnius traffic authority</p>
+          <div class="row">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${pk.latitude},${pk.longitude}&travelmode=driving" target="_blank" rel="noopener">Directions</a>          </div>
+        </div>`;
+        const m = L.marker([pk.latitude, pk.longitude], { icon: parkingIcon, title: "Disabled parking " + (pk.address || ""), zIndexOffset: -100 })
+          .bindPopup(card, { offset: [0, -10], maxWidth: 300, autoPanPaddingTopLeft: isPhone() ? [20, 20] : [440, 20] });
+        if (!isPhone()) m.bindTooltip(esc(pk.address ? "Parking: " + pk.address : "Disabled parking"), { direction: "top", offset: [0, -12] });
         m.addTo(parkingLayer);
         parkingMarkers.set(pk.id, m);
       }
@@ -385,20 +829,16 @@
     }
 
     async function setParking(on) {
+      $("parking").setAttribute("aria-pressed", String(on));
       if (on) {
-        try {
-          await loadParking();
-          map.addLayer(parkingLayer);
-        } catch (err) {
-          toast("Could not load parking");
-        }
+        try { await loadParking(); map.addLayer(parkingLayer); }
+        catch (err) { toast("Disabled parking could not be loaded."); }
       } else {
         map.removeLayer(parkingLayer);
       }
     }
 
     async function showParking(id) {
-      $("parking").checked = true;
       await setParking(true);
       const m = parkingMarkers.get(id);
       if (m) {
@@ -406,48 +846,48 @@
         m.openPopup();
       }
     }
+    $("parking").addEventListener("click", () => setParking($("parking").getAttribute("aria-pressed") !== "true"));
 
-    $("parking").addEventListener("change", (e) => setParking(e.target.checked));
+    /* ---------- Location ---------- */
+    let meMarker;
+    $("locate").addEventListener("click", () => {
+      if (!navigator.geolocation) return toast("Your browser can’t share your location.");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const ll = [pos.coords.latitude, pos.coords.longitude];
+          map.setView(ll, 17);
+          if (meMarker) meMarker.setLatLng(ll);
+          else meMarker = L.marker(ll, { icon: L.divIcon({ className: "", html: '<span class="me-pin"></span>', iconSize: [18, 18], iconAnchor: [9, 9] }), title: "You are here" }).addTo(map);
+        },
+        () => toast("Location is off. Allow location access for this site and try again.")
+      );
+    });
 
-    // ---------- Categories, stats, location ----------
+    /* ---------- Categories & stats ---------- */
     async function loadCategories() {
       try {
         const cats = await getJSON(`${API}/categories`);
-        for (const c of cats.slice(0, 30)) {
-          const o = document.createElement("option");
-          o.value = c.category;
-          o.textContent = `${pretty(c.category)} (${c.count})`;
-          $("category").appendChild(o);
-        }
-      } catch (e) { /* the filter still works without categories */ }
+        const html = cats.slice(0, 10).map((c) =>
+          `<button class="chip" type="button" data-cat="${esc(c.category)}" aria-pressed="false">${esc(prettyCat(c.category))}</button>`).join("");
+        $("cats").insertAdjacentHTML("beforeend", html);
+      } catch (e) { /* category chips are optional */ }
     }
 
     async function loadStats() {
       try {
         const s = await getJSON(`${API}/stats`);
         const total = s.osm_wheelchair.reduce((sum, r) => sum + r.count, 0);
-        const unknown = (s.osm_wheelchair.find((r) => r.wheelchair_value === "unknown") || { count: 0 }).count;
+        const osmUnknown = (s.osm_wheelchair.find((r) => r.wheelchair_value === "unknown") || { count: 0 }).count;
+        const unknown = s.osm_unknown_unverified != null ? s.osm_unknown_unverified : osmUnknown;
         const pct = total ? Math.round((unknown / total) * 100) : 0;
-        $("stats").innerHTML = `<strong class="big">${pct}%</strong> of ${total.toLocaleString()} mapped places in Vilnius have
-          <b>no wheelchair information</b>. Visited one? Tap it and help fill the gap.
-          <p class="source">${s.parking_locations} accessible parking locations · ${s.parking_spaces} spaces (JUDU)</p>`;
+        const filled = s.visitor_checked_places || 0;
+        $("insight").innerHTML = `<span class="big">${pct}%</span>
+          <p>of ${total.toLocaleString("en")} mapped places in Vilnius have no wheelchair information yet: <b>${unknown.toLocaleString("en")}</b> left to check. Visited one? Tap it and fill the gap.</p>
+          <small>${filled ? `${plural(filled, "place")} checked by visitors so far. ` : ""}${s.parking_locations} disabled parking spots with ${s.parking_spaces} spaces, from JUDU</small>`;
       } catch (e) {
-        $("stats").textContent = "";
+        $("insight").hidden = true;
       }
     }
-
-    $("locate").addEventListener("click", () => {
-      if (!navigator.geolocation) return toast("Location is not available");
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const ll = [pos.coords.latitude, pos.coords.longitude];
-          map.setView(ll, 17);
-          L.circleMarker(ll, { radius: 8, color: "#fff", weight: 3, fillColor: "#1a56db", fillOpacity: 1 })
-            .addTo(map).bindTooltip("You are here");
-        },
-        () => toast("Could not get your location")
-      );
-    });
 
     loadCategories();
     loadStats();
@@ -455,4 +895,4 @@
     loadPlaces();
   </script>
 </body>
-</html> 
+</html>
